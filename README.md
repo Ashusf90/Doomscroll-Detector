@@ -157,6 +157,7 @@ The dashboard provides:
 
 B.Tech – Computer Science and Engineering (AI)
 
+Live Link:  https://doomscroll-detector-a6xueptirftsoz6ezdk7hz.streamlit.app/
 GitHub: [Ashusf90](https://github.com/Ashusf90)
 
 **Project Repository:** [Doomscroll Detector](https://github.com/Ashusf90/Doomscroll-Detector)
