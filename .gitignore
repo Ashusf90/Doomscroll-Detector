@@ -1,0 +1,9 @@
+.venv/
+.env
+__pycache__/
+*.pyc
+.DS_Store
+models/*.pt
+yolov8n.pt
+data/usage_history.json
+.streamlit/secrets.toml
