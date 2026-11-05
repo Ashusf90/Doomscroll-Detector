@@ -1,187 +1,83 @@
 import streamlit as st
+import streamlit.components.v1 as components
+import streamlit_webrtc
+import av
 import cv2
 import time
-import pandas as pd
+import threading
 
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
 from app.detection.detector import PhoneDetector
 from app.tracking.usage_tracker import UsageTracker
 from app.alerts.alert_manager import AlertManager
 
 st.set_page_config(
     page_title="Doomscroll Detector",
-    page_icon="◼",
+    page_icon="📵",
     layout="wide"
 )
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
 .stApp {
-    background:
-        radial-gradient(ellipse at 50% -20%, #292929 0%, transparent 55%),
-        linear-gradient(145deg, #080808, #111111 55%, #080808);
-    color: #f5f5f5;
-    font-family: 'Inter', sans-serif;
+    background: radial-gradient(ellipse at 50% -20%, #292929, transparent 55%),
+                linear-gradient(145deg, #080808, #111111, #080808);
+    color: white;
 }
-
 .block-container {
     max-width: 1250px;
-    padding-top: 2.5rem;
-    padding-bottom: 2rem;
+    padding-top: 2rem;
 }
+header, footer {visibility: hidden;}
 
-header, footer {
-    visibility: hidden;
-}
-
-/* GLASS HEADER */
-.hero {
-    position: relative;
-    overflow: hidden;
+.hero, .metric-card {
     background: rgba(255,255,255,0.055);
-    backdrop-filter: blur(28px) saturate(140%);
-    -webkit-backdrop-filter: blur(28px) saturate(140%);
+    backdrop-filter: blur(28px);
+    -webkit-backdrop-filter: blur(28px);
     border: 1px solid rgba(255,255,255,0.14);
-    border-radius: 24px;
-    padding: 34px;
-    margin-bottom: 30px;
-    box-shadow: 0 18px 55px rgba(0,0,0,0.35),
-                inset 0 1px 0 rgba(255,255,255,0.10);
+    border-radius: 20px;
+    padding: 25px;
+    box-shadow: 0 12px 35px #00000055,
+                inset 0 1px 0 #ffffff18;
 }
-
-.hero:before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 8%;
-    width: 84%;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, #ffffff55, transparent);
-}
-
-.eyebrow {
-    color: #a5a5a5;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 2px;
-    margin-bottom: 12px;
-}
-
-.hero h1 {
-    font-size: 37px;
-    font-weight: 800;
-    letter-spacing: -1.5px;
-    color: #ffffff;
-    margin: 0;
-}
-
-.hero p {
-    color: #aaaaaa;
-    font-size: 14px;
-    margin-top: 10px;
-}
-
-/* SECTION HEADINGS */
+.hero {margin-bottom: 25px;}
+.hero h1 {font-size: 35px; font-weight: 800; color: white;}
+.hero p, .stCaption {color: #999;}
 .section-title {
-    font-size: 17px;
+    font-size: 18px;
     font-weight: 700;
-    color: #eeeeee;
-    margin: 26px 0 15px;
+    margin: 25px 0 15px;
 }
-
-/* FROSTED GLASS METRICS */
-.metric-card {
-    position: relative;
-    overflow: hidden;
-    background: rgba(255,255,255,0.055);
-    backdrop-filter: blur(24px) saturate(130%);
-    -webkit-backdrop-filter: blur(24px) saturate(130%);
-    border: 1px solid rgba(255,255,255,0.13);
-    border-radius: 19px;
-    padding: 23px;
-    min-height: 120px;
-    box-shadow: 0 12px 35px rgba(0,0,0,0.22),
-                inset 0 1px 0 rgba(255,255,255,0.08);
-    transition: all 0.25s ease;
-}
-
-.metric-card:hover {
-    background: rgba(255,255,255,0.085);
-    border-color: rgba(255,255,255,0.25);
-    transform: translateY(-3px);
-}
-
+.metric-card {min-height: 110px;}
 .metric-label {
-    color: #a5a5a5;
+    color: #999;
     font-size: 11px;
-    font-weight: 600;
     letter-spacing: 1px;
 }
-
 .metric-value {
-    color: #ffffff;
-    font-size: 29px;
+    color: white;
+    font-size: 27px;
     font-weight: 700;
     margin-top: 12px;
 }
-
-/* GLASS BUTTONS */
 div.stButton > button {
-    background: rgba(255,255,255,0.10);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    color: #ffffff;
-    border: 1px solid rgba(255,255,255,0.20);
-    border-radius: 12px;
-    height: 45px;
-    font-weight: 650;
-    transition: all 0.25s ease;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
+    background: #eeeeee;
+    color: #111111;
+    border: 1px solid #eeeeee;
+    border-radius: 10px;
+    font-weight: 700;
+    height: 44px;
 }
-
 div.stButton > button:hover {
-    background: rgba(255,255,255,0.19);
-    color: #ffffff;
-    border-color: rgba(255,255,255,0.4);
-    box-shadow: 0 8px 25px rgba(255,255,255,0.06);
+    background: #cccccc;
+    color: black;
 }
-
-/* SLIDER */
-div[data-testid="stSlider"] label {
-    color: #cccccc;
-}
-
-div[data-testid="stSlider"] [role="slider"] {
-    background: #ffffff;
-}
-
-/* ALERTS */
 div[data-testid="stAlert"] {
-    background: rgba(255,255,255,0.065);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255,255,255,0.13);
-    border-radius: 13px;
-    color: #eeeeee;
+    background: #171717;
+    border: 1px solid #333;
+    border-radius: 12px;
 }
-
-/* CAMERA */
-div[data-testid="stImage"] img {
-    border: 1px solid rgba(255,255,255,0.18);
-    border-radius: 18px;
-    box-shadow: 0 15px 45px rgba(0,0,0,0.35);
-}
-
-/* SLIDER AND TEXT */
-.stCaption {
-    color: #929292;
-}
-
-hr {
-    border-color: rgba(255,255,255,0.12);
-}
-
+hr {border-color: #333;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -191,49 +87,51 @@ def load_detector():
     return PhoneDetector()
 
 
-if "running" not in st.session_state:
-    st.session_state.running = False
+class PhoneVideoProcessor(VideoProcessorBase):
+    def __init__(self):
+        self.detector = load_detector()
+        self.tracker = UsageTracker()
+        self.lock = threading.Lock()
+        self.detected = False
+        self.seconds = 0
+        self.sessions = 0
 
-if "tracker" not in st.session_state:
-    st.session_state.tracker = UsageTracker()
+    def recv(self, frame):
+        image = frame.to_ndarray(format="bgr24")
+        image = cv2.flip(image, 1)
 
-tracker = st.session_state.tracker
-detector = load_detector()
+        image, detections = self.detector.detect(image)
+
+        with self.lock:
+            self.seconds = self.tracker.update(bool(detections))
+            self.sessions = self.tracker.get_sessions()
+            self.detected = bool(detections)
+
+        return av.VideoFrame.from_ndarray(image, format="bgr24")
 
 
-# HEADER
 st.markdown("""
 <div class="hero">
-    <div class="eyebrow">COMPUTER VISION · DIGITAL WELLNESS</div>
-    <h1>DOOMSCROLL DETECTOR<span style="color:#999">.</span></h1>
+    <div style="color:#999;font-size:11px;letter-spacing:2px">
+        COMPUTER VISION · DIGITAL WELLNESS
+    </div>
+    <h1>DOOMSCROLL DETECTOR.</h1>
     <p>Monitor phone usage. Understand your habits. Take back your time.</p>
 </div>
 """, unsafe_allow_html=True)
 
 
-# SETTINGS
-left, right = st.columns([2, 1])
+st.markdown('<div class="section-title">Monitoring settings</div>',
+            unsafe_allow_html=True)
 
-with left:
-    st.markdown('<div class="section-title">Monitoring settings</div>',
-                unsafe_allow_html=True)
-    limit = st.slider("Usage alert threshold", 10, 300, 60,
-                      format="%d seconds")
-
-with right:
-    st.markdown('<div class="section-title">Session controls</div>',
-                unsafe_allow_html=True)
-    if st.button("↻  Reset statistics", use_container_width=True):
-        tracker.reset()
-        st.rerun()
+limit = st.slider("Usage alert threshold", 10, 300, 60,
+                  format="%d seconds")
 
 
-# DASHBOARD
 st.markdown('<div class="section-title">Overview</div>',
             unsafe_allow_html=True)
 
 m1, m2, m3 = st.columns(3)
-
 total_display = m1.empty()
 sessions_display = m2.empty()
 status_display = m3.empty()
@@ -248,142 +146,72 @@ def metric_card(placeholder, label, value):
     """, unsafe_allow_html=True)
 
 
-def update_dashboard(seconds):
+def update_dashboard(seconds, sessions):
     metric_card(total_display, "TOTAL DETECTED TIME", f"{seconds}s")
-    metric_card(sessions_display, "DETECTION SESSIONS",
-                str(tracker.get_sessions()))
+    metric_card(sessions_display, "DETECTION SESSIONS", str(sessions))
 
     if seconds >= limit:
         color, message = "#ff8585", "LIMIT REACHED"
     elif seconds >= limit * 0.75:
-        color, message = "#d5d5d5", "APPROACHING LIMIT"
+        color, message = "#cccccc", "APPROACHING LIMIT"
     else:
         color, message = "#ffffff", "WITHIN LIMIT"
 
-    status_display.markdown(f"""
-    <div class="metric-card">
-        <div class="metric-label">CURRENT STATUS</div>
-        <div class="metric-value" style="font-size:21px;color:{color}">
-            {message}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    metric_card(
+        status_display,
+        "CURRENT STATUS",
+        f'<span style="color:{color};font-size:20px">{message}</span>'
+    )
 
 
-update_dashboard(tracker.get_total())
-
-
-# CAMERA
-st.markdown('<div class="section-title">Live monitoring</div>',
+st.markdown('<div class="section-title">Live webcam monitoring</div>',
             unsafe_allow_html=True)
 
-control_col, info_col = st.columns([1, 2])
+ctx = webrtc_streamer(
+    key="doomscroll-camera",
+    video_processor_factory=PhoneVideoProcessor,
+    media_stream_constraints={
+        "video": True,
+        "audio": False
+    },
+    async_processing=True
+)
 
-with control_col:
-    if st.button(
-        "STOP MONITORING" if st.session_state.running
-        else "START MONITORING",
-        use_container_width=True
-    ):
-        st.session_state.running = not st.session_state.running
-        st.rerun()
-
-with info_col:
-    st.caption("Keep your phone visible to the webcam for real-time detection.")
-
-video = st.empty()
 alert_display = st.empty()
 
+if ctx.video_processor:
+    processor = ctx.video_processor
 
-if st.session_state.running:
-    camera = cv2.VideoCapture(0)
+    while ctx.state.playing:
+        with processor.lock:
+            seconds = processor.seconds
+            sessions = processor.sessions
+            detected = processor.detected
 
-    if not camera.isOpened():
-        st.error("Camera unavailable. Check macOS camera permissions.")
-        st.session_state.running = False
-    else:
-        try:
-            while st.session_state.running:
-                success, frame = camera.read()
+        update_dashboard(seconds, sessions)
 
-                if not success:
-                    st.error("Unable to read camera frame.")
-                    break
+        message = AlertManager.get_alert(seconds, limit)
 
-                frame = cv2.flip(frame, 1)
-                frame, detections = detector.detect(frame)
+        if seconds >= limit:
+            alert_display.error(message)
+        elif seconds >= limit * 0.75:
+            alert_display.warning(message)
+        elif detected:
+            alert_display.success("Phone detected. Monitoring usage.")
+        else:
+            alert_display.info("No phone detected.")
 
-                seconds = tracker.update(bool(detections))
-                alert = AlertManager.get_alert(seconds, limit)
+        time.sleep(1)
 
-                update_dashboard(seconds)
-
-                if seconds >= limit:
-                    alert_display.error(alert)
-                elif seconds >= limit * 0.75:
-                    alert_display.warning(alert)
-                else:
-                    alert_display.success(alert)
-
-                video.image(
-                    cv2.cvtColor(frame, cv2.COLOR_BGR2RGB),
-                    channels="RGB",
-                    use_container_width=True
-                )
-
-                time.sleep(0.03)
-
-        finally:
-            camera.release()
-
-
-
-# USAGE ANALYTICS
-st.markdown('<div class="section-title">Usage analytics</div>',
-            unsafe_allow_html=True)
-
-history = tracker.get_history()
-
-if history:
-    df = pd.DataFrame(history)
-    df["date"] = pd.to_datetime(df["date"])
-
-    daily = (
-        df.groupby("date")["duration"]
-        .sum()
-        .reset_index()
-    )
-    daily["minutes"] = daily["duration"] / 60
-
-    st.markdown("#### Daily detected phone usage")
-    st.bar_chart(daily.set_index("date")["minutes"],
-                 y_label="Minutes")
-
-    st.markdown("#### Detection session history")
-    display_df = df.copy()
-    display_df["date"] = display_df["date"].dt.strftime("%Y-%m-%d")
-    display_df["duration"] = display_df["duration"].round(1)
-    display_df.columns = ["Date", "Start time", "Duration (seconds)"]
-
-    st.dataframe(display_df, use_container_width=True, hide_index=True)
-
-    csv_data = display_df.to_csv(index=False).encode("utf-8")
-
-    st.download_button(
-        label="↓ Download Usage Report",
-        data=csv_data,
-        file_name="doomscroll_usage_report.csv",
-        mime="text/csv",
-        use_container_width=True
-    )
 else:
-    st.info("No completed detection sessions yet. Start monitoring to build your usage history.")
+    update_dashboard(0, 0)
+    st.info("Start the webcam above to begin phone detection.")
+
 
 st.markdown("""
 <hr>
-<div style="text-align:center;color:#858585;font-size:11px;padding:18px;
-letter-spacing:1px">
-DOOMSCROLL DETECTOR · BUILT WITH PYTHON, YOLO & OPENCV
+<div style="text-align:center;color:#888;font-size:11px;padding:15px">
+DOOMSCROLL DETECTOR · PYTHON · YOLO · OPENCV
 <br><br>
 MONITOR YOUR HABITS. RECLAIM YOUR TIME.
 </div>
